@@ -1,5 +1,5 @@
 #Azure location for deployment
-variable "location"    { default = "westeurope"}
+variable "location"    { default = "eastus"}
 
 //Public SSH key to be placed on the teamserver VM
 variable "ssh_key"    { default = "<PUBLIC SSH KEY>"}
