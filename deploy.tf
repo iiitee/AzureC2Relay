@@ -10,7 +10,11 @@ terraform {
 
 
 provider "azurerm" {
-  features {}
+  features {
+     resource_group {
+       prevent_deletion_if_contains_resources = false
+     }
+  }
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -42,29 +46,23 @@ resource "azurerm_storage_account" "storage" {
   account_replication_type = "LRS"
 }
 
-resource "azurerm_app_service_plan" "servplan" {
+resource "azurerm_service_plan" "servplan" {
   name                =  "${var.uniq_prefix}${var.plan_name}"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  kind                = "Linux"
-  reserved            = true
-  sku {
-    tier = "Standard"
-    size = "P1V2"
-  }
+  os_type             = "Linux"
+  sku_name            = "P1v2"
 }
 
-resource "azurerm_function_app" "func" {
+resource "azurerm_linux_function_app" "func" {
   name                       = "${var.func_name}"
   location                   = azurerm_resource_group.rg.location
   resource_group_name        = azurerm_resource_group.rg.name
-  app_service_plan_id        = azurerm_app_service_plan.servplan.id
+  service_plan_id            = azurerm_service_plan.servplan.id
   storage_account_name       = azurerm_storage_account.storage.name
   storage_account_access_key = azurerm_storage_account.storage.primary_access_key
-  os_type                    = "linux"
-  version	                 = "~2"
   app_settings = {
-    FUNCTIONS_EXTENSION_VERSION                 = "~2"
+    FUNCTIONS_EXTENSION_VERSION                 = "~4"
     FUNCTIONS_WORKER_RUNTIME                    = "dotnet"
     SCM_DO_BUILD_DURING_DEPLOYMENT              = true
     MalleableProfileB64                          = "${data.local_file.ParseMalleable.content}"
@@ -76,6 +74,9 @@ resource "azurerm_function_app" "func" {
 
 	site_config {
 		always_on   = "true"
+		application_stack{
+			dotnet_version = "8.0"
+			}
 	}
 
    depends_on = [
@@ -215,8 +216,8 @@ resource "azurerm_linux_virtual_machine" "vm" {
 
     source_image_reference {
         publisher = "Canonical"
-        offer     = "0001-com-ubuntu-server-focal"
-        sku       = "20_04-lts-gen2"
+        offer     = "0001-com-ubuntu-server-jammy"
+        sku       = "22_04-lts-gen2"
         version   = "latest"
     }
 
@@ -246,14 +247,17 @@ resource "azurerm_linux_virtual_machine" "vm" {
  
 	  inline = [
       "echo \"${var.ssh_key}\" >> ~/.ssh/authorized_keys",
-      "sudo apt update -y",
-      "sudo apt -f install openjdk-11-jre-headless -y",
-	  "sudo apt -f install openjdk-11-jdk-headless -y",
+	    "sudo apt update -y",
+	    "sleep 5",
+	    "sudo apt update -y",
+	    "sudo apt -f install openjdk-11-jre-headless -y",
+	    "sudo apt -f install openjdk-11-jdk-headless -y",
       "tar xvf cobaltstrike-dist.tgz",
       "rm cobaltstrike-dist.tgz",
       "cd cobaltstrike", 
       "echo \"${var.COBALTKEY}\" | bash update", 
-      "cp ~/${var.PROFILE_FILE} ~/cobaltstrike/${var.PROFILE_FILE}",
+      "cp ~/${var.PROFILE_FILE} ~/cobaltstrike/server/${var.PROFILE_FILE}",
+	    "cd server",
       "echo \"sudo bash teamserver ${self.private_ip_address} ${var.TEAM_PASS} ${var.PROFILE_FILE}\" > RunServer.sh",
       "tmux new-session -d -s CobaltTeamServer 'sudo bash RunServer.sh'",
       ]
@@ -308,11 +312,11 @@ resource "null_resource" "funcdep" {
 }
 
 resource "azurerm_app_service_virtual_network_swift_connection" "funcass" {
-  app_service_id = azurerm_function_app.func.id
+  app_service_id = azurerm_linux_function_app.func.id
   subnet_id      = azurerm_subnet.subnet2.id
 
    depends_on = [
-	   azurerm_function_app.func,
+	   azurerm_linux_function_app.func,
 	   azurerm_subnet.subnet2
    ]
 }

@@ -12,7 +12,7 @@
             "type": "String"
         },
 		 "location": {
-            "defaultValue": "westeurope",
+            "defaultValue": "eastus",
             "type": "String"
         }
     },
@@ -24,7 +24,7 @@
             "name": "[parameters('cdn_profile_name')]",
             "location": "[parameters('location')]",
             "sku": {
-                "name": "Standard_Verizon"
+                "name": "Standard_Microsoft"
             },
             "properties": {}
         },
@@ -67,6 +67,7 @@
                 "deliveryPolicy": {
                     "rules": [
                         {
+							"name": "DefaultCacheExpirationRule",
                             "order": 0,
                             "conditions": [],
                             "actions": [
